@@ -14,11 +14,17 @@ class TenzoCases(unittest.TestCase):
         expected_result = {"17:00": 50, "22:00": 40}
         self.assertEqual(EmptySolution.process_sales('transactions.csv'), expected_result)
 
-    def test_can_calculate_time_period_less_than_an_hour(self):
-        self.assertEqual('0:50', EmptySolution.get_total_time_period('15:40', '16:30'))
+    # def test_can_calculate_time_period_less_than_an_hour(self):
+    #     self.assertEqual('0:50', EmptySolution.get_total_time_period('15:40', '16:30'))
+    #
+    # def test_can_calculate_time_period_greater_than_an_hour(self):
+    #     self.assertEqual('1:10', EmptySolution.get_total_time_period('15:40', '16:50'))
 
-    def test_can_calculate_time_period_greater_than_an_hour(self):
-        self.assertEqual('1:10', EmptySolution.get_total_time_period('15:40', '16:50'))
+    def test_can_calculate_percentage(self):
+        shifts = EmptySolution.process_shifts('work_shifts.csv')
+        sales = EmptySolution.process_sales('transactions.csv')
+        self.assertEqual('{"17:00": 20, "22:00": -40,}', EmptySolution.compute_percentage(shifts, sales))
+
 
 if __name__ == '__main__':
     unittest.main()
