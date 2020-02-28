@@ -82,10 +82,9 @@ def process_shifts(path_to_csv):
     with open(path_to_csv, 'r') as shiftcsv:
         shiftcsv.readline()  # Pass over the header line
         result = dict()
-        # break_notes, end_time, pay_rate, start_time
+        # [break_notes, end_time, pay_rate, start_time]
         for s in shiftcsv:
             shift = s.split(",")
-
             hourly_rate = float(shift[2])
             shift_start = shift[3].split(':')
             shift_end = shift[1].split(':')
@@ -93,53 +92,66 @@ def process_shifts(path_to_csv):
             # Process the shift start and end times as these might not always start on the hour
             if f'{shift_start[0]}:00' in result:
                 # add the remaining minutes in the hour from commencement of the shift
-                result[f'{shift_start[0]}:00'] += rate_calculation_for_minutes(60 - int(shift_start[1]), hourly_rate)
+                result[f'{shift_start[0]}:00'] = \
+                    round(result[f'{shift_start[0]}:00'] +
+                          rate_calculation_for_minutes(60 - int(shift_start[1]), hourly_rate), 2)
             else:
-                result[f'{shift_start[0]}:00'] = rate_calculation_for_minutes(60 - int(shift_start[1]), hourly_rate)
+                result[f'{shift_start[0]}:00'] = \
+                    round(rate_calculation_for_minutes(60 - int(shift_start[1]), hourly_rate), 2)
 
+            # Calculate the minutes if a shift does not end on the hour
             if shift_end[1] != '00':
                 if f'{shift_end[0]}:00' in result:
-                    result[f'{shift_end[0]}:00'] += rate_calculation_for_minutes(int(shift_end[1]), hourly_rate)
+                    result[f'{shift_end[0]}:00'] = \
+                        round(result[f'{shift_end[0]}:00'] +
+                              rate_calculation_for_minutes(int(shift_end[1]), hourly_rate), 2)
                 else:
-                    result[f'{shift_end[0]}:00'] = rate_calculation_for_minutes(int(shift_end[1]), hourly_rate)
+                    result[f'{shift_end[0]}:00'] = \
+                        round(rate_calculation_for_minutes(int(shift_end[1]), hourly_rate), 2)
 
             # iterate through the shift hours excluding the shift start and end hours
             for h in range(int(shift_start[0]) + 1, int(shift_end[0])):
                 if f'{h}:00' in result:
-                    result[f'{h}:00'] += hourly_rate
+                    result[f'{h}:00'] = round(result[f'{h}:00'] + hourly_rate, 2)
                 else:
                     result[f'{h}:00'] = hourly_rate
 
             break_times = parse_break_note(shift[0], shift[3])
             break_start = break_times[0].split(":")
             break_end = break_times[1].split(":")
-
-            if break_start[0] != break_end[0]:
-                # subtract the remaining minutes in the hour which fall under the break period (60 - minutes-elapsed)
+            # check whether the break is within the same hour or not
+            if break_start[0] == break_end[0]:
                 if f'{break_start[0]}:00' in result:
-                    result[f'{break_start[0]}:00'] -= \
-                        rate_calculation_for_minutes(60 - int(break_start[1]), hourly_rate)
+                    result[f'{break_start[0]}:00'] = \
+                        round(result[f'{break_start[0]}:00'] -
+                              rate_calculation_for_minutes(int(break_end[1]) - int(break_start[1]), hourly_rate), 2)
                 else:
                     result[f'{break_start[0]}:00'] = \
-                        0 - rate_calculation_for_minutes(60 - int(break_start[1]), hourly_rate)
+                        round(0 - rate_calculation_for_minutes(int(break_end[1]) - int(break_start[1]), hourly_rate), 2)
+            else:
+                # subtract the remaining minutes in the hour when the break period starts
+                if f'{break_start[0]}:00' in result:
+                    result[f'{break_start[0]}:00'] = \
+                        round(result[f'{break_start[0]}:00'] -
+                              rate_calculation_for_minutes(60 - int(break_start[1]), hourly_rate), 2)
+                else:
+                    result[f'{break_start[0]}:00'] = \
+                        round(0 - rate_calculation_for_minutes(60 - int(break_start[1]), hourly_rate), 2)
 
+                # Calculate the minutes if a break does not end on the hour
                 if break_end[1] != '00':
                     if f'{break_end[0]}:00' in result:
-                        result[f'{break_end[0]}:00'] -= rate_calculation_for_minutes(int(break_end[1]), hourly_rate)
+                        result[f'{break_end[0]}:00'] = \
+                            round(result[f'{break_end[0]}:00'] -
+                                  rate_calculation_for_minutes(int(break_end[1]), hourly_rate), 2)
                     else:
-                        result[f'{break_end[0]}:00'] = rate_calculation_for_minutes(int(break_end[1]), hourly_rate)
+                        result[f'{break_end[0]}:00'] = \
+                            round(rate_calculation_for_minutes(int(break_end[1]), hourly_rate), 2)
 
-                # iterate through the break hours excluding the shift start and end hours
+                # iterate through the break hours excluding start and end hours
                 for h in range(int(break_start[0]) + 1, int(break_end[0])):
                     if f'{h}:00' in result:
-                        result[f'{h}:00'] -= hourly_rate
-            else:
-                if f'{break_start[0]}:00' in result:
-                    result[f'{break_start[0]}:00'] -= rate_calculation_for_minutes(int(break_end[1]) -
-                                                                                   int(break_start[1]), hourly_rate)
-                else:
-                    result[f'{break_start[0]}:00'] = \
-                        0 - rate_calculation_for_minutes(int(break_end[1]) - int(break_start[1]), hourly_rate)
+                        result[f'{h}:00'] = round(result[f'{h}:00'] - hourly_rate, 2)
         return result
 
 
@@ -165,14 +177,14 @@ def process_sales(path_to_csv):
     with open(path_to_csv, 'r') as salescsv:
         salescsv.readline()  # Pass over the header line
         result = dict()
-        # amount, time
+        # [amount, time]
         for s in salescsv:
             sale = s.strip().split(",")
             hour = sale[1].split(':')[0]
-            if hour in result:
-                result[f'{hour}:00'] += float(sale[0])
+            if f'{hour}:00' in result:
+                result[f'{hour}:00'] = round(result[f'{hour}:00'] + float(sale[0]), 2)
             else:
-                result[f'{hour}:00'] = float(sale[0])
+                result[f'{hour}:00'] = round(float(sale[0]), 2)
     return result
 
 
@@ -213,20 +225,22 @@ def best_and_worst_hour(percentages):
     e.g. ["18:00", "20:00"]
     :rtype: list
     """
-    best = 0
-    worst = 0
-    # best hour is lowest percentage value
+    best = ''
+    worst = ''
+    # best hour is lowest percentage value if there are sales else highest negative value
     # worst hour is highest percentage value if no negative value exists else lowest negative value
-
     hours_with_sales = {hour: percentages[hour] for hour in percentages if percentages[hour] > 0}
     if len(hours_with_sales.keys()) > 0:
         best = min(hours_with_sales, key=hours_with_sales.get)
         worst = max(hours_with_sales, key=hours_with_sales.get)
 
-    # look for any hours where there were no sales and get the lowest value
-    for hour in percentages:
-        if percentages[hour] <= 0 and percentages[hour] < percentages[worst]:
-            worst = hour
+        # look for any hours where there were no sales and get the lowest value
+        for hour in percentages:
+            if percentages[hour] <= 0 and percentages[hour] < percentages[worst]:
+                worst = hour
+    else:
+        best = max(hours_with_sales, key=hours_with_sales.get)
+        worst = min(hours_with_sales, key=hours_with_sales.get)
 
     return [best, worst]
 
@@ -248,7 +262,7 @@ if __name__ == '__main__':
     # You can change this to test your code, it will not be used
     path_to_sales = "transactions.csv"
     path_to_shifts = "work_shifts.csv"
-    best, worst = main(path_to_shifts, path_to_sales)
-    print(f'{best} {worst}')
+    bestHour, worstHour = main(path_to_shifts, path_to_sales)
+    print(f'{bestHour} {worstHour}')
 
 # Please write you name here: Roy Langa
